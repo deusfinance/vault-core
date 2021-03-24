@@ -2,7 +2,7 @@
 
 pragma solidity >=0.6.0 <0.8.0;
 
-import "SandToken.sol";
+import "SealedToken.sol";
 
 interface TokenSubInterface {
     function balanceOf(address account) external view returns (uint256);
@@ -13,8 +13,8 @@ interface TokenSubInterface {
 	function burn(address from, uint256 amount) external;
 }
 
-contract SandController{
-	function calculateSand(address from, uint256 amount) public view returns (uint256){
+contract SealedController {
+	function calculateSealed(address from, uint256 amount) public view returns (uint256){
 		return amount;
 	}
 	function calculateWithdrawAmount(address to, uint256 amount) public view returns (uint256){
@@ -22,12 +22,8 @@ contract SandController{
 	}
 }
 
-contract TimeController{
-	using SafeMath for uint256;
-
-	function calculateTime(address from, uint256 amount) public view returns (uint256){
-		return amount.div(2);
-	}
+interface TimeController {
+	function calculateTime(address from, uint256 amount) external view returns (uint256);
 }
 
 contract Vault is Ownable {
@@ -39,136 +35,97 @@ contract Vault is Ownable {
 
     using SafeMath for uint256;
 
-    mapping (address => User) public users;
-
-    // uint256 public scale = 1e18;
-
-    // uint256 public particleCollector = 0;
-    // uint256 public daoShare;
-    // uint256 public earlyFoundersShare;
-    // address public daoWallet;
-    // address public earlyFoundersWallet;
-
     TokenSubInterface public lockedToken;
 	TokenSubInterface public timeToken;
-	SandToken public sandToken;
-	SandController public sandController;
+	SealedToken public sealedToken;
+	SealedController public sealedController;
 	TimeController public timeController;
 
 	uint256 public startBlock;
 	uint256 public endLockBlock;
 
-    event Locked(address user, uint256 lockedAmount, uint256 sandAmount, uint256 timeAmount);
-    event Withdraw(address user, uint256 sandAmount, uint256 lockedAmount);
+    event Locked(address user, uint256 lockedAmount, uint256 sealedAmount, uint256 timeAmount);
+    event Withdraw(address user, uint256 sealedAmount, uint256 lockedAmount);
 
     constructor (
 		address _lockedToken,
-		// uint256 _daoShare,
-		// uint256 _earlyFoundersShare,
 		string memory name,
 		string memory symbol,
-		address _feeCalculator,
-		address _feeCollector,
+		address feeCalculator,
+		address feeCollector,
+		address simpleTransferController,
 		address _timeToken,
-		address _sandController,
+		address _sealedController,
 		address _timeController
 		) public {
 			lockedToken = TokenSubInterface(_lockedToken);
+
+			sealedToken = new SealedToken(name, symbol, feeCalculator, feeCollector, simpleTransferController,  msg.sender);
+			
 			timeToken = TokenSubInterface(_timeToken);
-			sandToken = new SandToken(name, symbol, _feeCalculator, _feeCollector, msg.sender);
-			sandController = SandController(_sandController);
+			sealedController = SealedController(_sealedController);
 			timeController = TimeController(_timeController);
 
 			startBlock = block.number; //todo get it in constructor
 			endLockBlock = block.number; //todo get it in constructor
-
-
-			// daoShare = _daoShare;
-			// earlyFoundersShare = _earlyFoundersShare;
-			// daoWallet = msg.sender;
-			// earlyFoundersWallet = msg.sender;
     }
-
-	function setSandController(address _sandController) public onlyOwner{
-		sandController = SandController(_sandController);
+    
+	function setSealedController(address _sealedController) public onlyOwner {
+		sealedController = SealedController(_sealedController);
 	}
 
-	function setTimeController(address _timeController) public onlyOwner{
+	function setTimeController(address _timeController) public onlyOwner {
 		timeController = TimeController(_timeController);
 	}
 
-	function setBlocks(uint256 _startBlock, uint256 _endLockBlock) public onlyOwner{
+	function setBlocks(uint256 _startBlock, uint256 _endLockBlock) public onlyOwner {
 		startBlock = _startBlock;
 		endLockBlock = _endLockBlock;
 	}
 
-    // function setWallets(address _daoWallet, address _earlyFoundersWallet) public onlyOwner {
-    //     daoWallet = _daoWallet;
-    //     earlyFoundersWallet = _earlyFoundersWallet;
-    // }
-
-    // function setShares(uint256 _daoShare, uint256 _earlyFoundersShare) public onlyOwner {
-    //     withdrawParticleCollector();
-    //     daoShare = _daoShare;
-    //     earlyFoundersShare = _earlyFoundersShare;
-    // }
-
-	function sandAndTimeAmount(uint256 amount, address _user) external view returns (uint256, uint256){
-		uint256 sandAmount = sandController.calculateSand(_user, amount);
+	function sealedAndTimeAmount(address _user, uint256 amount) public view returns (uint256, uint256) {
+		uint256 sealedAmount = sealedController.calculateSealed(_user, amount);
 		uint256 timeAmount = timeController.calculateTime(_user, amount); 
-		return (sandAmount, timeAmount);
+		return (sealedAmount, timeAmount);
 	}
 
-    function lockFor(uint256 amount, address _user) public {
-		require(block.number > startBlock , 'inappropriate time for locking'); // TODO add end block check
+    function lockFor(uint256 amount, address _user) public returns (uint256) {
+		require(block.number > startBlock && block.number < endLockBlock, 'inappropriate time for locking'); // TODO add end block check
 
-        User storage user = users[_user];
-        user.lockedAmount = user.lockedAmount.add(amount);
         lockedToken.transferFrom(address(msg.sender), address(this), amount);
-		uint256 sandAmount = sandController.calculateSand(_user, amount);
-		sandToken.mint(msg.sender, sandAmount);
 
-		uint256 timeAmount = timeController.calculateTime(_user, amount); 
+		(uint256 sealedAmount,uint256 timeAmount) = sealedAndTimeAmount(_user, amount);
+
+		sealedToken.mint(msg.sender, sealedAmount);
 		timeToken.mint(_user, timeAmount);
 
-        emit Locked(_user, amount, sandAmount, timeAmount);
+        emit Locked(_user, amount, sealedAmount, timeAmount);
+
+		return sealedAmount;
     }
 
-	function lock(uint256 amount) public {
-		lockFor(amount, msg.sender);
+	function lock(uint256 amount) external returns (uint256) {
+		return lockFor(amount, msg.sender);
 	}
 
-	function getWithdrawAmount(uint256 amount, address user) external view returns (uint256){
-		uint256 withdrawShare = lockedToken.balanceOf(address(this)).mul(amount).div(sandToken.totalSupply());
-		return sandController.calculateWithdrawAmount(user, withdrawShare);
+	function getWithdrawAmount(uint256 amount, address user) external view returns (uint256) {
+		uint256 withdrawShare = lockedToken.balanceOf(address(this)).mul(amount).div(sealedToken.totalSupply());
+		return sealedController.calculateWithdrawAmount(user, withdrawShare);
 	} 
 
-    function withdraw(uint256 amount) public {
-		require(block.number > endLockBlock , 'inappropriate time to withdraw'); // TODO add end block check
+    function withdraw(uint256 amount) public returns (uint256) {
+		require(block.number > endLockBlock , 'inappropriate time to withdraw');
 
-        User storage user = users[msg.sender];
-        // user.lockedAmount = user.lockedAmount.sub(amount);
-
-		uint256 withdrawShare = lockedToken.balanceOf(address(this)).mul(amount).div(sandToken.totalSupply());
-		uint256 withdrawAmount = sandController.calculateWithdrawAmount(msg.sender, withdrawShare);
+		uint256 withdrawShare = lockedToken.balanceOf(address(this)).mul(amount).div(sealedToken.totalSupply());
+		uint256 withdrawAmount = sealedController.calculateWithdrawAmount(msg.sender, withdrawShare);
 		lockedToken.transfer(msg.sender, withdrawAmount);
-		sandToken.burn(msg.sender, amount);
+		sealedToken.burn(msg.sender, amount);
 
         emit Withdraw(msg.sender, amount, withdrawAmount);
 
-        // uint256 particleCollectorShare = _pendingReward.mul(daoShare.add(earlyFoundersShare)).div(scale);
-        // particleCollector = particleCollector.add(particleCollectorShare);
+		return withdrawAmount;
     }
 
-    // function withdrawParticleCollector() public {
-    //     uint256 _daoShare = particleCollector.mul(daoShare).div(daoShare.add(earlyFoundersShare));
-    //     rewardToken.transfer(daoWallet, _daoShare);
-
-    //     uint256 _earlyFoundersShare = particleCollector.mul(earlyFoundersShare).div(daoShare.add(earlyFoundersShare));
-    //     rewardToken.transfer(earlyFoundersWallet, _earlyFoundersShare);
-
-    //     particleCollector = 0;
-    // }
 
     // Add temporary withdrawal functionality for owner(DAO) to transfer all tokens to a safe place.
     // Contract ownership will transfer to address(0x) after full auditing of codes.
@@ -182,6 +139,7 @@ contract Vault is Ownable {
     function withdrawLockedTokens(address to, uint256 amount) public onlyOwner {
         lockedToken.transfer(to, amount);
     }
+
 
 }
 

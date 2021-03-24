@@ -2,16 +2,25 @@
 
 pragma solidity >=0.6.0 <0.8.0;
 
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol";
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/AccessControl.sol";
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/ERC20.sol";
 
 
-contract TransferController{
+contract TransferController is Ownable{
 
-	constructor() public{}
+	mapping (address => bool) public transferableAddresses;
+
+	function setAddressTransferState(address _address, bool state) public onlyOwner{
+		transferableAddresses[_address] = state;
+	}
+
+	constructor() public{
+		transferableAddresses[address(0)] = true;
+	}
 	
 	function beforeTokenTransfer(address from, address to, uint256 value) public{
-		require(from == address(0) || to == address(0) , 'TimeToken is not transferable');
+		require(transferableAddresses[from] || transferableAddresses[to] , 'TimeToken is not transferable');
 	}
 }
 
@@ -25,11 +34,12 @@ contract TimeToken is ERC20, AccessControl{
 
 	TransferController public transferController;
 
-    constructor() public ERC20('Deus Time Token ', 'DTT') {
+    constructor() public ERC20('DEUS Time Token ', 'TIME') {
 		_setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
 		_setupRole(CONFIG_ROLE, msg.sender);
 
 		transferController = new TransferController();
+		transferController.transferOwnership(msg.sender);
     }
 
 	function setTransferController(address _transferController) public{
