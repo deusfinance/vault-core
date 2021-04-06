@@ -14,24 +14,23 @@ interface TokenSubInterface {
 }
 
 contract SealedController {
+
+	using SafeMath for uint256;
+
 	function calculateSealed(address from, uint256 amount) public view returns (uint256){
-		return amount;
+		return amount.mul(1e5);
 	}
 	function calculateWithdrawAmount(address to, uint256 amount) public view returns (uint256){
-		return amount;
+		return amount.mul(1e5);
 	}
 }
+
 
 interface TimeController {
 	function calculateTime(address from, uint256 amount) external view returns (uint256);
 }
 
 contract Vault is Ownable {
-
-    struct User {
-        uint256 lockedAmount;
-        uint256 paidReward;
-    }
 
     using SafeMath for uint256;
 
@@ -61,13 +60,13 @@ contract Vault is Ownable {
 			lockedToken = TokenSubInterface(_lockedToken);
 
 			sealedToken = new SealedToken(name, symbol, feeCalculator, feeCollector, simpleTransferController,  msg.sender);
-			
+
 			timeToken = TokenSubInterface(_timeToken);
 			sealedController = SealedController(_sealedController);
 			timeController = TimeController(_timeController);
 
-			startBlock = block.number; //todo get it in constructor
-			endLockBlock = block.number; //todo get it in constructor
+			startBlock = block.number;
+			endLockBlock = block.number + 1176500; //181 days
     }
     
 	function setSealedController(address _sealedController) public onlyOwner {
@@ -90,7 +89,7 @@ contract Vault is Ownable {
 	}
 
     function lockFor(uint256 amount, address _user) public returns (uint256) {
-		require(block.number > startBlock && block.number < endLockBlock, 'inappropriate time for locking'); // TODO add end block check
+		require(block.number > startBlock && block.number < endLockBlock, 'inappropriate time for locking');
 
         lockedToken.transferFrom(address(msg.sender), address(this), amount);
 

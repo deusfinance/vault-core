@@ -34,7 +34,7 @@ contract TimeToken is ERC20, AccessControl{
 
 	TransferController public transferController;
 
-    constructor() public ERC20('DEUS Time Token ', 'TIME') {
+    constructor() public ERC20('DEUS Time Token', 'TIME') {
 		_setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
 		_setupRole(CONFIG_ROLE, msg.sender);
 

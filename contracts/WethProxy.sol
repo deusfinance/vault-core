@@ -9,6 +9,7 @@ interface WETH9 {
 
 interface Vault {
 	function lockFor(uint256 amount, address _user) external returns (uint256);
+	function sealedAndTimeAmount(address _user, uint256 amount) external view returns (uint256, uint256);
 }
 
 interface SealedToken {
@@ -19,7 +20,6 @@ contract WethProxy{
 	Vault public ethVault;
 	WETH9 public wethToken;
 	SealedToken public sealedToken;
-	//mainnet : 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
 
 	constructor(address ethVaultAddress, address wethAddress, address _sealedToken) public{
 		ethVault = Vault(ethVaultAddress);
@@ -27,11 +27,15 @@ contract WethProxy{
 		wethToken.approve(ethVaultAddress,1e50);
 		sealedToken = SealedToken(_sealedToken);
 	}
-	
-	function lock(uint256 amount) public payable{
+
+	function lock() public payable{
 		wethToken.deposit{value:msg.value}();
-		uint256 sealedAmount = ethVault.lockFor(amount, msg.sender);
+		uint256 sealedAmount = ethVault.lockFor(msg.value, msg.sender);
 		sealedToken.transfer(msg.sender, sealedAmount);
+	}
+
+	function sealedAndTimeAmount(address user, uint256 amount) public view returns (uint256, uint256) {
+		return ethVault.sealedAndTimeAmount(user, amount);
 	}
 }
 

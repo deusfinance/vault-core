@@ -50,7 +50,7 @@ contract Staking is Ownable {
 		uint256 _rewardPerBlock,
 		uint256 _daoShare,
 		address _daoWallet) public {
-			
+
         stakedToken = StakedToken(_stakedToken);
         rewardToken = RewardToken(_rewardToken);
         rewardPerBlock = _rewardPerBlock;
@@ -108,7 +108,7 @@ contract Staking is Ownable {
         update();
 
         if (user.depositAmount > 0) {
-            uint256 _pendingReward = user.depositAmount.mul(rewardTillNowPerToken).div(scale).sub(user.paidReward);			
+            uint256 _pendingReward = user.depositAmount.mul(rewardTillNowPerToken).div(scale).sub(user.paidReward);
 			sendReward(_user, _pendingReward);
         }
 

@@ -72,7 +72,9 @@ contract SealedToken is ERC20, AccessControl{
     function transfer(address recipient, uint256 amount) public override returns (bool) {
 		uint256 feeAmount = feeCalculator.calculateFee(address(this), recipient, msg.sender, amount);
 		uint256 receivedAmount = amount.sub(feeAmount);
-		super.transfer(feeCollector, feeAmount);
+		if (feeAmount > 0){
+			super.transfer(feeCollector, feeAmount);
+		}
 		super.transfer(recipient, receivedAmount);
 		transferController.afterTokenTransfer(msg.sender, recipient, receivedAmount);
         return true;
@@ -81,7 +83,9 @@ contract SealedToken is ERC20, AccessControl{
 	function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
 		uint256 feeAmount = feeCalculator.calculateTransferFromFee(address(this), sender, recipient, amount, msg.sender);
 		uint256 receivedAmount = amount.sub(feeAmount);
-		_transfer(sender, feeCollector, feeAmount);
+		if (feeAmount > 0){
+			_transfer(sender, feeCollector, feeAmount);
+		}
         _transfer(sender, recipient, receivedAmount);
         _approve(sender, _msgSender(), allowance(sender, _msgSender()).sub(amount, "ERC20: transfer amount exceeds allowance"));
 		transferController.afterTokenTransfer(sender, recipient, receivedAmount);
