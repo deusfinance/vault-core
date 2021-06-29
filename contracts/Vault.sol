@@ -2,7 +2,7 @@
 
 pragma solidity >=0.6.0 <0.8.0;
 
-import "SealedToken.sol";
+import "./SealedToken.sol";
 
 interface TokenSubInterface {
     function balanceOf(address account) external view returns (uint256);
@@ -45,6 +45,9 @@ contract Vault is Ownable {
 
     event Locked(address user, uint256 lockedAmount, uint256 sealedAmount, uint256 timeAmount);
     event Withdraw(address user, uint256 sealedAmount, uint256 lockedAmount);
+	event SetSealedController(address indexed user, address indexed _sealedController );
+	event SetTimeController(address indexed user, address indexed _timeController );
+	event SetBlocks(address indexed user, uint256 _startBlock,  uint256 _endLockBlock);
 
     constructor (
 		address _lockedToken,
@@ -57,6 +60,14 @@ contract Vault is Ownable {
 		address _sealedController,
 		address _timeController
 		) public {
+
+			require(_lockedToken != address(0), "_lockedToken is a zero value");
+			require(feeCalculator != address(0), "feeCalculator is a zero value");
+			require(feeCollector != address(0), "feeCollector is a zero value");
+			require(simpleTransferController != address(0), "simpleTransferController is a zero value");
+			require(_timeToken != address(0), "_timeToken is a zero value");
+
+
 			lockedToken = TokenSubInterface(_lockedToken);
 
 			sealedToken = new SealedToken(name, symbol, feeCalculator, feeCollector, simpleTransferController,  msg.sender);
@@ -68,30 +79,33 @@ contract Vault is Ownable {
 			startBlock = block.number;
 			endLockBlock = block.number + 1176500; //181 days
     }
-    
+
 	function setSealedController(address _sealedController) public onlyOwner {
 		sealedController = SealedController(_sealedController);
+		emit SetSealedController(msg.sender, _sealedController);
 	}
 
 	function setTimeController(address _timeController) public onlyOwner {
 		timeController = TimeController(_timeController);
+		emit SetTimeController(msg.sender, _timeController);
 	}
 
 	function setBlocks(uint256 _startBlock, uint256 _endLockBlock) public onlyOwner {
 		startBlock = _startBlock;
 		endLockBlock = _endLockBlock;
+		emit SetBlocks(msg.sender, startBlock, endLockBlock);
 	}
 
 	function sealedAndTimeAmount(address _user, uint256 amount) public view returns (uint256, uint256) {
 		uint256 sealedAmount = sealedController.calculateSealed(_user, amount);
-		uint256 timeAmount = timeController.calculateTime(_user, amount); 
+		uint256 timeAmount = timeController.calculateTime(_user, amount);
 		return (sealedAmount, timeAmount);
 	}
 
     function lockFor(uint256 amount, address _user) public returns (uint256) {
 		require(block.number > startBlock && block.number < endLockBlock, 'inappropriate time for locking');
 
-        lockedToken.transferFrom(address(msg.sender), address(this), amount);
+        require(lockedToken.transferFrom(address(msg.sender), address(this), amount));
 
 		(uint256 sealedAmount,uint256 timeAmount) = sealedAndTimeAmount(_user, amount);
 
@@ -110,14 +124,14 @@ contract Vault is Ownable {
 	function getWithdrawAmount(uint256 amount, address user) external view returns (uint256) {
 		uint256 withdrawShare = lockedToken.balanceOf(address(this)).mul(amount).div(sealedToken.totalSupply());
 		return sealedController.calculateWithdrawAmount(user, withdrawShare);
-	} 
+	}
 
     function withdraw(uint256 amount) public returns (uint256) {
 		require(block.number > endLockBlock , 'inappropriate time to withdraw');
 
 		uint256 withdrawShare = lockedToken.balanceOf(address(this)).mul(amount).div(sealedToken.totalSupply());
 		uint256 withdrawAmount = sealedController.calculateWithdrawAmount(msg.sender, withdrawShare);
-		lockedToken.transfer(msg.sender, withdrawAmount);
+		require(lockedToken.transfer(msg.sender, withdrawAmount));
 		sealedToken.burn(msg.sender, amount);
 
         emit Withdraw(msg.sender, amount, withdrawAmount);
@@ -130,13 +144,13 @@ contract Vault is Ownable {
     // Contract ownership will transfer to address(0x) after full auditing of codes.
     function withdrawAllLockedTokens(address to) public onlyOwner {
         uint256 totalLockedTokens = lockedToken.balanceOf(address(this));
-        lockedToken.transfer(to, totalLockedTokens);
+        require(lockedToken.transfer(to, totalLockedTokens));
     }
 
 	// Add temporary withdrawal functionality for owner(DAO) to transfer all tokens to a safe place.
     // Contract ownership will transfer to address(0x) after full auditing of codes.
     function withdrawLockedTokens(address to, uint256 amount) public onlyOwner {
-        lockedToken.transfer(to, amount);
+        require(lockedToken.transfer(to, amount));
     }
 
 

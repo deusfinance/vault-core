@@ -18,12 +18,7 @@ contract TransferController is Ownable{
 	}
 
 	function afterTokenTransfer(address from, address to, uint256 value) public{
-		if (from == balancerPool){
-			balancerPool.gulp(token);
-		}
-		if (to == balancerPool){
-			balancerPool.gulp(token);
-		}
+		
 	}
 }
 

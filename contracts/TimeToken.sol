@@ -2,9 +2,9 @@
 
 pragma solidity >=0.6.0 <0.8.0;
 
-import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol";
-import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/AccessControl.sol";
-import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/ERC20.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v3.4.0/contracts/access/Ownable.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v3.4.0/contracts/access/AccessControl.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v3.4.0/contracts/token/ERC20/ERC20.sol";
 
 
 contract TransferController is Ownable{
@@ -18,7 +18,7 @@ contract TransferController is Ownable{
 	constructor() public{
 		transferableAddresses[address(0)] = true;
 	}
-	
+
 	function beforeTokenTransfer(address from, address to, uint256 value) public{
 		require(transferableAddresses[from] || transferableAddresses[to] , 'TimeToken is not transferable');
 	}
@@ -34,6 +34,8 @@ contract TimeToken is ERC20, AccessControl{
 
 	TransferController public transferController;
 
+	event SetTransferController(address indexed user, address indexed _transferController );
+
     constructor() public ERC20('DEUS Time Token', 'TIME') {
 		_setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
 		_setupRole(CONFIG_ROLE, msg.sender);
@@ -45,6 +47,7 @@ contract TimeToken is ERC20, AccessControl{
 	function setTransferController(address _transferController) public{
 		require(hasRole(CONFIG_ROLE, msg.sender), "Caller is not a configer");
 		transferController = TransferController(_transferController);
+		emit SetTransferController(msg.sender, _transferController);
 	}
 
     function mint(address to, uint256 amount) public {

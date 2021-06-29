@@ -22,6 +22,11 @@ contract WethProxy{
 	SealedToken public sealedToken;
 
 	constructor(address ethVaultAddress, address wethAddress, address _sealedToken) public{
+
+		require(ethVaultAddress != address(0), "ethVaultAddress is a zero value");
+		require(wethAddress != address(0), "wethAddress is a zero value");
+		require(_sealedToken != address(0), "_sealedToken is a zero value");
+
 		ethVault = Vault(ethVaultAddress);
 		wethToken = WETH9(wethAddress);
 		wethToken.approve(ethVaultAddress,1e50);

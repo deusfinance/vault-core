@@ -2,19 +2,20 @@
 
 pragma solidity >=0.6.0 <0.8.0;
 
-import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/AccessControl.sol";
-import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/ERC20.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v3.4.0/contracts/access/AccessControl.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v3.4.0/contracts/token/ERC20/ERC20.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v3.4.0/contracts/utils/ReentrancyGuard.sol";
 
-import "FeeCalculator.sol";
+import "./FeeCalculator.sol";
 
 contract TransferController{
 
 	constructor() public{}
-	
+
 	function afterTokenTransfer(address from, address to, uint256 value) public{}
 }
 
-contract SealedToken is ERC20, AccessControl{
+contract SealedToken is ERC20, AccessControl, ReentrancyGuard(){
 
     using SafeMath for uint256;
 
@@ -32,8 +33,8 @@ contract SealedToken is ERC20, AccessControl{
 		address _feeCalculator,
 		address _feeCollector,
 		address simpleTransferController,
-		address admin) 
-		public ERC20(name, symbol) {
+		address admin)
+		public ERC20(name, symbol) ReentrancyGuard() {
 			_setupRole(DEFAULT_ADMIN_ROLE, admin);
 			_setupRole(CONFIG_ROLE, admin);
 			_setupRole(MINTER_ROLE, msg.sender);
@@ -69,7 +70,7 @@ contract SealedToken is ERC20, AccessControl{
         _burn(from, amount);
     }
 
-    function transfer(address recipient, uint256 amount) public override returns (bool) {
+    function transfer(address recipient, uint256 amount) public nonReentrant() override returns (bool) {
 		uint256 feeAmount = feeCalculator.calculateFee(address(this), recipient, msg.sender, amount);
 		uint256 receivedAmount = amount.sub(feeAmount);
 		if (feeAmount > 0){
@@ -80,7 +81,7 @@ contract SealedToken is ERC20, AccessControl{
         return true;
     }
 
-	function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
+	function transferFrom(address sender, address recipient, uint256 amount) public nonReentrant() override returns (bool) {
 		uint256 feeAmount = feeCalculator.calculateTransferFromFee(address(this), sender, recipient, amount, msg.sender);
 		uint256 receivedAmount = amount.sub(feeAmount);
 		if (feeAmount > 0){

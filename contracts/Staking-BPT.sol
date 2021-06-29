@@ -2,8 +2,8 @@
 
 pragma solidity 0.6.12;
 
-import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/math/SafeMath.sol";
-import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v3.4.0/contracts/math/SafeMath.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v3.4.0/contracts/access/Ownable.sol";
 
 interface StakedToken {
     function balanceOf(address account) external view returns (uint256);
@@ -45,11 +45,15 @@ contract Staking is Ownable {
     event RewardPerBlockChanged(uint256 oldValue, uint256 newValue);
 
     constructor (
-		address _stakedToken,
-		address _rewardToken,
-		uint256 _rewardPerBlock,
-		uint256 _daoShare,
-		address _daoWallet) public {
+        address _stakedToken,
+        address _rewardToken,
+        uint256 _rewardPerBlock,
+        uint256 _daoShare,
+        address _daoWallet) public {
+
+        require(_stakedToken != address(0), "_stakingToken is a zero value");
+        require(_rewardToken != address(0), "_rewardToken is a zero value");
+
 
         stakedToken = StakedToken(_stakedToken);
         rewardToken = RewardToken(_rewardToken);
@@ -79,7 +83,11 @@ contract Staking is Ownable {
             return;
         }
         uint256 totalStakedToken = stakedToken.balanceOf(address(this));
-        uint256 rewardAmount = (block.number - lastUpdatedBlock).mul(rewardPerBlock);
+        if (totalStakedToken == 0) {
+            lastUpdatedBlock = block.number;
+            return;
+        }
+        uint256 rewardAmount = (block.number.sub(lastUpdatedBlock)).mul(rewardPerBlock);
 
         rewardTillNowPerToken = rewardTillNowPerToken.add(rewardAmount.mul(scale).div(totalStakedToken));
         lastUpdatedBlock = block.number;
@@ -92,15 +100,15 @@ contract Staking is Ownable {
 
         if (block.number > lastUpdatedBlock) {
             uint256 totalStakedToken = stakedToken.balanceOf(address(this));
-            uint256 rewardAmount = (block.number - lastUpdatedBlock).mul(rewardPerBlock);
+            uint256 rewardAmount = (block.number.sub(lastUpdatedBlock)).mul(rewardPerBlock);
             accRewardPerToken = accRewardPerToken.add(rewardAmount.mul(scale).div(totalStakedToken));
         }
         uint256 reward = user.depositAmount.mul(accRewardPerToken).div(scale).sub(user.paidReward);
-		return reward.mul(daoShare).div(scale);
+        return reward.mul(daoShare).div(scale);
     }
 
-	function deposit(uint256 amount) public {
-		depositFor(msg.sender, amount);
+    function deposit(uint256 amount) public {
+        depositFor(msg.sender, amount);
     }
 
     function depositFor(address _user, uint256 amount) public {
@@ -109,21 +117,22 @@ contract Staking is Ownable {
 
         if (user.depositAmount > 0) {
             uint256 _pendingReward = user.depositAmount.mul(rewardTillNowPerToken).div(scale).sub(user.paidReward);
-			sendReward(_user, _pendingReward);
+            user.paidReward = user.depositAmount.mul(rewardTillNowPerToken).div(scale);
+            sendReward(_user, _pendingReward);
         }
 
         user.depositAmount = user.depositAmount.add(amount);
         user.paidReward = user.depositAmount.mul(rewardTillNowPerToken).div(scale);
-        stakedToken.transferFrom(address(msg.sender), address(this), amount);
+        require(stakedToken.transferFrom(address(msg.sender), address(this), amount));
         emit Deposit(_user, amount);
     }
 
-	function sendReward(address user, uint256 amount) private {
-		uint256 _daoShare = amount.mul(daoShare).div(scale);
-        rewardToken.transfer(user, amount.sub(_daoShare));
-		rewardToken.transfer(daoWallet, _daoShare);
+    function sendReward(address user, uint256 amount) private {
+        uint256 _daoShare = amount.mul(daoShare).div(scale);
+        require(rewardToken.transfer(user, amount.sub(_daoShare)));
+        require(rewardToken.transfer(daoWallet, _daoShare));
         emit RewardClaimed(user, amount);
-	}
+    }
 
     function withdraw(uint256 amount) public {
         User storage user = users[msg.sender];
@@ -131,22 +140,22 @@ contract Staking is Ownable {
         update();
 
         uint256 _pendingReward = user.depositAmount.mul(rewardTillNowPerToken).div(scale).sub(user.paidReward);
-		sendReward(msg.sender, _pendingReward);
+        user.paidReward = user.depositAmount.mul(rewardTillNowPerToken).div(scale);
+        sendReward(msg.sender, _pendingReward);
 
         if (amount > 0) {
             user.depositAmount = user.depositAmount.sub(amount);
-            stakedToken.transfer(address(msg.sender), amount);
+            require(stakedToken.transfer(address(msg.sender), amount));
             emit Withdraw(msg.sender, amount);
         }
 
-        user.paidReward = user.depositAmount.mul(rewardTillNowPerToken).div(scale);
     }
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
     function emergencyWithdraw() public {
         User storage user = users[msg.sender];
 
-        stakedToken.transfer(msg.sender, user.depositAmount);
+        require(stakedToken.transfer(msg.sender, user.depositAmount));
 
         emit EmergencyWithdraw(msg.sender, user.depositAmount);
 
@@ -154,26 +163,23 @@ contract Staking is Ownable {
         user.paidReward = 0;
     }
 
-	function emergencyWithdrawFor(address _user) public onlyOwner{
+    function emergencyWithdrawFor(address _user) public onlyOwner{
         User storage user = users[_user];
-
-        stakedToken.transfer(_user, user.depositAmount);
-
-        emit EmergencyWithdraw(_user, user.depositAmount);
-
         user.depositAmount = 0;
         user.paidReward = 0;
+        require(stakedToken.transfer(_user, user.depositAmount));
+        emit EmergencyWithdraw(_user, user.depositAmount);
     }
 
     function withdrawRewardTokens(address to, uint256 amount) public onlyOwner {
-        rewardToken.transfer(to, amount);
+        require(rewardToken.transfer(to, amount));
     }
 
-	// Add temporary withdrawal functionality for owner(DAO) to transfer all tokens to a safe place.
+    // Add temporary withdrawal functionality for owner(DAO) to transfer all tokens to a safe place.
     // Contract ownership will transfer to address(0x) after full auditing of codes.
     function withdrawAllStakedtokens(address to) public onlyOwner {
         uint256 totalStakedTokens = stakedToken.balanceOf(address(this));
-        stakedToken.transfer(to, totalStakedTokens);
+        require(stakedToken.transfer(to, totalStakedTokens));
     }
 
 }
