@@ -150,24 +150,25 @@ contract Staking is Ownable {
 
     }
 
-    // Withdraw without caring about rewards. EMERGENCY ONLY.
+	// Withdraw without caring about rewards. EMERGENCY ONLY.
     function emergencyWithdraw() public {
-        User storage user = users[msg.sender];
-        user.depositAmount = 0;
-        user.paidReward = 0;
-        require(stakedToken.transfer(msg.sender, user.depositAmount));
-        emit EmergencyWithdraw(msg.sender, user.depositAmount);
-    }
+		User storage user = users[msg.sender];
+		uint256 amount = user.depositAmount;
+		user.depositAmount = 0;
+		user.paidReward = 0;
+		require(stakedToken.transfer(msg.sender, amount));
+		emit EmergencyWithdraw(msg.sender, amount);
 
-	function emergencyWithdrawFor(address _user) public onlyOwner{
+	}
+
+
+    function emergencyWithdrawFor(address _user) public onlyOwner{
         User storage user = users[_user];
-
-        require(stakedToken.transfer(_user, user.depositAmount));
-
-        emit EmergencyWithdraw(_user, user.depositAmount);
-
-        user.depositAmount = 0;
-        user.paidReward = 0;
+		uint256 amount = user.depositAmount;
+		user.depositAmount = 0;
+		user.paidReward = 0;
+		require(stakedToken.transfer(_user, amount));
+		emit EmergencyWithdraw(_user, amount);
     }
 
     function withdrawRewardTokens(address to, uint256 amount) public onlyOwner {
